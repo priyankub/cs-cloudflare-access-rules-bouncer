@@ -23,6 +23,9 @@ import urllib.request
 
 log = logging.getLogger("bouncer")
 
+VERSION = "0.1.2"
+# CrowdSec LAPI expects name/version and logs a warning on every pull otherwise.
+USER_AGENT = f"cs-cloudflare-access-rules-bouncer/v{VERSION}"
 HEALTH_FILE = "/tmp/healthy"
 CF_API = os.environ.get("CF_API_URL", "https://api.cloudflare.com/client/v4")
 VALID_MODES = {"block", "challenge", "js_challenge", "managed_challenge"}
@@ -96,7 +99,7 @@ def http_json(method, url, headers, body=None, timeout=30):
 class Lapi:
     def __init__(self, cfg):
         self.cfg = cfg
-        self.headers = {"X-Api-Key": cfg.lapi_key, "User-Agent": "cs-cloudflare-access-rules-bouncer"}
+        self.headers = {"X-Api-Key": cfg.lapi_key, "User-Agent": USER_AGENT}
 
     def stream(self, startup):
         q = urllib.parse.urlencode({
@@ -116,7 +119,7 @@ class Cloudflare:
     def __init__(self, cfg):
         self.cfg = cfg
         self.headers = {"Authorization": f"Bearer {cfg.cf_token}",
-                        "User-Agent": "cs-cloudflare-access-rules-bouncer"}
+                        "User-Agent": USER_AGENT}
         self.min_gap = 1.0 / cfg.rate
         self.last = 0.0
 

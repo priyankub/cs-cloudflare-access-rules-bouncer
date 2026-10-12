@@ -198,6 +198,7 @@ class Bouncer:
         # base -> set of (target, value) held by rules we don't own
         self.foreign = {}
         self.skipped = set()
+        self.over_cap = False
 
     def apply_decisions(self, new, deleted):
         for d in deleted:
@@ -246,9 +247,11 @@ class Bouncer:
             newest = max(decisions)
             items.append((newest, key, mode, decisions[newest][1]))
         items.sort(reverse=True)
-        if len(items) > self.cfg.max_rules:
+        over = len(items) > self.cfg.max_rules
+        if over and not self.over_cap:
             log.warning("%d targets exceed MAX_RULES=%d; keeping the newest", len(items), self.cfg.max_rules)
-            items = items[:self.cfg.max_rules]
+        self.over_cap = over
+        items = items[:self.cfg.max_rules]
         return items
 
     def do(self, verb, base, key, fn):
@@ -289,7 +292,8 @@ class Bouncer:
                 budget -= 1
                 if self.do("delete", base, key, lambda: self.cf.delete(base, cur[key]["id"])):
                     del cur[key]
-                    log.info("removed %s from %s", key[1], base)
+                    if not self.cfg.dry_run:
+                        log.info("removed %s from %s", key[1], base)
             for _, key, mode, scenario in wanted:
                 if key in self.foreign[base]:
                     continue
@@ -301,14 +305,16 @@ class Bouncer:
                     r = self.do("create", base, key, lambda: self.cf.create(base, *key, mode, notes))
                     if r:
                         cur[key] = {"id": r["id"], "mode": mode}
-                        log.info("added %s %s (%s) to %s", mode, key[1], scenario, base)
+                        if not self.cfg.dry_run:
+                            log.info("added %s %s (%s) to %s", mode, key[1], scenario, base)
                 elif cur[key]["mode"] != mode:
                     if budget <= 0:
                         return False
                     budget -= 1
                     if self.do("update", base, key, lambda: self.cf.update(base, cur[key]["id"], mode, notes)):
                         cur[key]["mode"] = mode
-                        log.info("changed %s to %s on %s", key[1], mode, base)
+                        if not self.cfg.dry_run:
+                            log.info("changed %s to %s on %s", key[1], mode, base)
         return True
 
     def run(self):
